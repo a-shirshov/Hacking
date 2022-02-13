@@ -13,16 +13,23 @@ func parseFirstLine(reader *bufio.Reader, message *string) string {
 	if errorMessage != nil {
 		log.Fatalln(errorMessage.Error())
 	}
-	*message += line
+	
 	//Достаём host Убираем http:// и :80
 	metaInfo := strings.Split(line, " ")
-	remoteServerName := metaInfo[1]
-	remoteServerName = strings.Replace(remoteServerName, "http://", "", 1)
-	remoteServerName = strings.TrimSuffix(remoteServerName, "/")
-	hostNameArray := strings.Split(remoteServerName,"/")
-	log.Println(hostNameArray)
+	fullUrl := metaInfo[1]
+	fullUrl = strings.Replace(fullUrl, "http://", "", 1)
+	fullUrl = strings.TrimSuffix(fullUrl, "/")
+	hostNameArray := strings.Split(fullUrl,"/")
+	//Находим относительный урл
+	url := "/"
+	if len(hostNameArray) != 1 {
+		url = "/" + strings.Join(hostNameArray[1:],"/")
+	}
+	log.Println("Url:",url)
+	log.Println("HostName:",hostNameArray)
+	//Записываем в сообщение первую строку с новым урл
+	*message += metaInfo[0] + " " + url + " " + metaInfo[2]
 	hostName := strings.TrimSuffix(hostNameArray[0],":80")
-	log.Println(hostName)
 	return hostName
 }
 
@@ -34,7 +41,6 @@ func Handler(conn net.Conn) {
 	//Парсим первую строку для нахождения куда отправить
 	//PS. Почему-то если не начать считывать, то ты длину сообщения не поймёшь
 	hostName := parseFirstLine(connReader,&message)
-	log.Println(hostName)
 	//Коннектимся к серверу
 	dest, err := net.Dial("tcp", "["+hostName+"]:80")
 	if err != nil {
