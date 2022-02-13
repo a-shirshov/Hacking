@@ -14,12 +14,16 @@ func parseFirstLine(reader *bufio.Reader, message *string) string {
 		log.Fatalln(errorMessage.Error())
 	}
 	*message += line
+	//Достаём host Убираем http:// и :80
 	metaInfo := strings.Split(line, " ")
 	remoteServerName := metaInfo[1]
 	remoteServerName = strings.Replace(remoteServerName, "http://", "", 1)
 	remoteServerName = strings.TrimSuffix(remoteServerName, "/")
-	remoteServerName = remoteServerName + ":80"
-	return remoteServerName
+	hostNameArray := strings.Split(remoteServerName,"/")
+	log.Println(hostNameArray)
+	hostName := strings.TrimSuffix(hostNameArray[0],":80")
+	log.Println(hostName)
+	return hostName
 }
 
 func Handler(conn net.Conn) {
@@ -29,10 +33,10 @@ func Handler(conn net.Conn) {
 	connReader := bufio.NewReader(conn)
 	//Парсим первую строку для нахождения куда отправить
 	//PS. Почему-то если не начать считывать, то ты длину сообщения не поймёшь
-	remoteServerName := parseFirstLine(connReader,&message)
-	log.Println(remoteServerName)
+	hostName := parseFirstLine(connReader,&message)
+	log.Println(hostName)
 	//Коннектимся к серверу
-	dest, err := net.Dial("tcp", remoteServerName)
+	dest, err := net.Dial("tcp", "["+hostName+"]:80")
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
@@ -45,18 +49,15 @@ func Handler(conn net.Conn) {
 
 	//Считываем сообщение и удаляем заголовок
 	for {
-		log.Println("In loop")
 		line, errorMessage := connReader.ReadString('\n')
 		if errorMessage != nil {
 			log.Fatalln(err.Error())
 		}
-		log.Println(line)
 		if !strings.HasPrefix(line, "Proxy-Connection:") {
 			message += line
 		}
 		messageSize -= len(line)
 		if messageSize == 0 {
-			log.Println("Hooray")
 			break
 		}
 	}
@@ -85,7 +86,6 @@ func main() {
 
 		log.Println("From:", conn.RemoteAddr().String())
 		log.Println("To proxy:", conn.LocalAddr().String())
-		log.Println("Here:")
 		go Handler(conn)
 	}
 
