@@ -1,50 +1,18 @@
 package main
 
 import (
-	//"bufio"
-	//"bytes"
-	//"encoding/binary"
-	//"bytes"
-	//"bufio"
 	"bufio"
 	"io"
 	"log"
+	"math/rand"
 	"net"
-
-	//"os"
 	"os/exec"
 	"strconv"
 	"strings"
 
-	"os"
-	"time"
-
-	//"time"
-	//"strings"
 	"crypto/tls"
+	"os"
 )
-
-/*
-func readSNI(conn net.Conn) {
-	defer conn.Close()
-
-	conn.SetReadDeadline(time.Now().Add(5*time.Second))
-	var buf bytes.Buffer
-	if _, err := io.CopyN(&buf,conn,1+2+2); err != nil {
-		log.Println(err)
-		return
-	}
-	length := binary.BigEndian.Uint16(buf.Bytes()[3:5])
-	if _, err := io.CopyN(&buf,conn,int64(length)); err != nil {
-		log.Println(err)
-		return
-	}
-
-	ch, ok := ParseClientHello(buf.Bytes())
-	if ok {
-		log.Println(ch.SNI)
-	}
-}*/
 
 //HTTPS
 //Host is definetly {site.com}:443 and Method is CONNECT
@@ -74,6 +42,7 @@ func ParseFirstLine(firstLine string) (string, string, string) {
 	return method, url, protocol
 }
 
+//returns example.com:80 or example.com:443
 func getHost(hostLine string) string {
 	hostLineParts := strings.Split(hostLine, " ")
 	host := hostLineParts[1]
@@ -86,23 +55,17 @@ func getHost(hostLine string) string {
 	return host
 }
 
-func MyRead(conn net.Conn) string {
-	var buf [64]byte
-	var message string
-	for {
-		conn.SetReadDeadline(time.Now().Add(time.Second * 10))
-		size, err := conn.Read(buf[:])
-		log.Println("Size", size)
+func ReadBytesN(reader io.Reader, size int64, message *string) {
+	buf := make([]byte, size)
+	_, err := io.ReadFull(reader, buf)
 		if err != nil {
-			log.Print(err)
-			return message
+			log.Print(err.Error())
 		}
-		message += string(buf[:size])
 
-	}
+	*message += string(buf[:])
 }
 
-func CopyFromConn(conn net.Conn) string {
+func ReadMessage(conn net.Conn) string {
 	var message string
 	contentLength := 0
 
@@ -112,6 +75,7 @@ func CopyFromConn(conn net.Conn) string {
 	bodyReadMode := "None"
 
 	connReader := bufio.NewReader(conn)
+	//Read Headers
 	for {
 		line, err := connReader.ReadString('\n')
 		if err != nil {
@@ -136,19 +100,11 @@ func CopyFromConn(conn net.Conn) string {
 
 		message += line
 
+		//Headers ended, going to body
 		if line == "\r\n" {
 			switch bodyReadMode {
 			case "Content-Length":
-				if contentLength != 0 {
-					buf := make([]byte, contentLength)
-					_, err := io.ReadFull(connReader, buf)
-					if err != nil {
-						log.Print(err.Error())
-					}
-
-					message += string(buf[:])
-				}
-
+				ReadBytesN(connReader,int64(contentLength),&message)
 			case "Chunked":
 				for {
 					line, err := connReader.ReadString('\n')
@@ -156,10 +112,7 @@ func CopyFromConn(conn net.Conn) string {
 						log.Print(err.Error())
 						return ""
 					}
-
-					//log.Print("Line:", line)
 					message += line
-
 					number := strings.TrimSuffix(line, "\r\n")
 					chunkLength, err := strconv.ParseInt(number, 16, 0)
 					if err != nil {
@@ -167,24 +120,9 @@ func CopyFromConn(conn net.Conn) string {
 						break
 					}
 
-					log.Print("Chunk Length:", chunkLength)
-
-					buf := make([]byte, chunkLength)
-					_, err = io.ReadFull(connReader, buf)
-					if err != nil {
-						log.Print(err.Error())
-					}
-
-					message += string(buf[:])
-
-					line, err = connReader.ReadString('\n')
-					if err != nil {
-						log.Print(err.Error())
-						return ""
-					}
-
-					log.Print("Line:", line)
-					message += line
+					//chunkLength counts without \r\n so we need to add 2 bytes
+					totalChunkSize := chunkLength + 2
+					ReadBytesN(connReader,totalChunkSize,&message)
 
 					if chunkLength == 0 {
 						break
@@ -199,6 +137,15 @@ func CopyFromConn(conn net.Conn) string {
 			return message
 		}
 	}
+}
+
+func CopyMessage(to net.Conn, from net.Conn) (error) {
+	message:= ReadMessage(from)
+	_, err := to.Write([]byte(message))
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func ParseMessage(message string) (string, string, string) {
@@ -232,17 +179,17 @@ func ParseMessage(message string) (string, string, string) {
 		}
 
 	}
-	log.Print("Result Message:\n", resultMessage)
-	log.Print("Result Bytes:", []byte(resultMessage))
 	return method, host, resultMessage
 }
 
+
 func Handler(conn net.Conn) {
 	defer conn.Close()
-	message := CopyFromConn(conn)
+	message := ReadMessage(conn)
 	log.Print("Message:\n", message)
 	method, host, modMessage := ParseMessage(message)
 
+	//HTTP
 	if method != "CONNECT" {
 		dest, err := net.Dial("tcp", host)
 		if err != nil {
@@ -252,16 +199,10 @@ func Handler(conn net.Conn) {
 
 		_, err = dest.Write([]byte(modMessage))
 		if err != nil {
-			log.Println(err.Error())
+			log.Print(err.Error())
 		}
-
-		responseFromServer := CopyFromConn(dest)
-
-		log.Print("Response:\n", responseFromServer)
-		_, err = conn.Write([]byte(responseFromServer))
-		if err != nil {
-			log.Println(err.Error())
-		}
+		CopyMessage(conn,dest)
+	//HTTPS
 	} else {
 
 		_, err := conn.Write([]byte(okMessage))
@@ -271,23 +212,15 @@ func Handler(conn net.Conn) {
 
 		hostWithoutPort := strings.TrimSuffix(host, ":443")
 
-		output, err := exec.Command("/bin/sh", "./gen_cert.sh", hostWithoutPort, "1000").Output()
+		rand := rand.Intn(100000001)
+		randStr := strconv.Itoa(rand)
+
+		output, err := exec.Command("/bin/sh", "./gen_cert.sh", hostWithoutPort, randStr).Output()
 		if err != nil {
 			log.Print(err.Error())
 		}
-
 		os.WriteFile("certs/"+hostWithoutPort+".crt", output, 0666)
 
-		/*
-			cert, err := tls.LoadX509KeyPair("ca.crt","ca.key")
-			if err != nil {
-				log.Print(err.Error())
-			}
-
-			conf := &tls.Config{
-				Certificates: []tls.Certificate{cert},
-			}
-		*/
 		certHost, err := tls.LoadX509KeyPair("certs/"+hostWithoutPort+".crt", "cert.key")
 		if err != nil {
 			log.Print(err.Error())
@@ -298,26 +231,18 @@ func Handler(conn net.Conn) {
 		}
 
 		tlsConn := tls.Server(conn, confHost)
-
 		tlsConn.Handshake()
-
 		conn = net.Conn(tlsConn)
-
-		superMessage := CopyFromConn(conn)
-		log.Print("Super Message:\n", superMessage)
 
 		dest, err := tls.Dial("tcp", host, confHost)
 		if err != nil {
 			log.Fatalln(err.Error())
 		}
+
 		defer dest.Close()
 
-		dest.Write([]byte(superMessage))
-
-		replyMessage := CopyFromConn(dest)
-		log.Print("Reply Message:\n", replyMessage)
-
-		conn.Write([]byte(replyMessage))
+		CopyMessage(dest,conn)
+		CopyMessage(conn,dest)
 
 	}
 }
