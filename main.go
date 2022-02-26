@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"io"
 	"log"
 	"math/rand"
@@ -22,24 +23,34 @@ import (
 
 const okMessage = "HTTP/1.0 200 Connection established\r\n\r\n"
 
+type request struct {
+	Method string `json:"method"`
+	Path string `json:"path"`
+	Protocol string `json:"protocol"`
+	Params map[string]interface{} `json:"params,omitempty"`
+	Headers map[string]interface{} `json:"headers,omitempty"`
+	Cookies map[string]interface{} `json:"cookies,omitempty"`
+	Body string `json:"body,omitempty"`
+}
+
 func ParseFirstLine(firstLine string) (string, string, string) {
 	firstLineParts := strings.Split(firstLine, " ")
 	method := firstLineParts[0]
 
 	link := firstLineParts[1]
 	link = strings.TrimPrefix(link, "http://")
-	url := "/"
+	path := "/"
 	linkParts := strings.Split(link, "/")
 	if len(linkParts) != 1 {
-		url = "/" + strings.Join(linkParts[1:], "/")
+		path = "/" + strings.Join(linkParts[1:], "/")
 	}
 
-	protocol := firstLineParts[2]
+	protocol := strings.TrimSuffix(firstLineParts[2],"\r")
 
-	log.Print("Url:", url)
+	log.Print("path:", path)
 	log.Print("Method:", method)
 	log.Print("Protocol:", protocol)
-	return method, url, protocol
+	return method, path, protocol
 }
 
 //returns example.com:80 or example.com:443
@@ -151,15 +162,15 @@ func CopyMessage(to net.Conn, from net.Conn) (error) {
 func ParseMessage(message string) (string, string, string) {
 	var method string
 	var host string
-	var url string
+	var path string
 	var protocol string
 
 	var resultMessage string
 	MessageLines := strings.Split(message, "\n")
 	for numOfLine, line := range MessageLines {
 		if numOfLine == 0 {
-			method, url, protocol = ParseFirstLine(line)
-			firstLine := method + " " + url + " " + protocol + "\n"
+			method, path, protocol = ParseFirstLine(line)
+			firstLine := method + " " + path + " " + protocol + "\r\n"
 			resultMessage += firstLine
 			continue
 		}
@@ -182,6 +193,77 @@ func ParseMessage(message string) (string, string, string) {
 	return method, host, resultMessage
 }
 
+func putParams(params string) map[string]interface{} {
+	mapParams := make(map[string]interface{})
+	paramsParts := strings.Split(params,"&")
+	for _,param := range paramsParts {
+		keyAndValue := strings.Split(param,"=")
+		key := keyAndValue[0]
+		value := keyAndValue[1]
+		mapParams[key] = value
+	}
+	return mapParams
+}
+
+func putCookies(cookies string) map[string]interface{} {
+	mapCookies := make(map[string]interface{})
+	cookiesParts := strings.Split(cookies,"; ")
+	for _,cookie := range cookiesParts {
+		keyAndValue := strings.Split(cookie,"=")
+		key := keyAndValue[0]
+		value := keyAndValue[1]
+		mapCookies[key] = value
+	}
+	return mapCookies
+}
+
+func MessageToJson(message string) string {
+	jsonRequest := &request{}
+	mapHeaders := make(map[string]interface{})
+	messageParts := strings.Split(message,"\r\n")
+
+	//Parse 
+	for index, line := range messageParts {
+		if index == 0 {
+			method, path,protocol := ParseFirstLine(line)
+			jsonRequest.Method = method
+			jsonRequest.Protocol = protocol
+			pathParts := strings.Split(path,"?")
+			jsonRequest.Path = pathParts[0]
+			jsonRequest.Params = putParams(pathParts[1])
+			continue
+		}
+
+		if strings.HasPrefix(line,"Cookie:") {
+			cookies := strings.TrimPrefix(line,"Cookie: ")
+			jsonRequest.Cookies = putCookies(cookies)
+			continue
+		}
+		//Delimeter beetween headers and body
+		if line != "" {
+			lineParts := strings.Split(line,": ")
+			headerName := lineParts[0]
+			log.Print(headerName)
+			headerValue := lineParts[1]
+			log.Print(headerValue)
+			mapHeaders[headerName] = headerValue
+		} else {
+			jsonRequest.Headers = mapHeaders
+			body := strings.Join(messageParts[index:],"")
+			jsonRequest.Body = body
+			break
+		}
+	}
+	
+	result, err := json.Marshal(jsonRequest)
+	if err != nil {
+		log.Print(err.Error())
+	}
+
+	log.Print("Json:",string(result))
+	return ""
+}
+
 
 func Handler(conn net.Conn) {
 	defer conn.Close()
@@ -196,6 +278,8 @@ func Handler(conn net.Conn) {
 			log.Fatalln(err.Error())
 		}
 		defer dest.Close()
+
+		_ = MessageToJson(modMessage)
 
 		_, err = dest.Write([]byte(modMessage))
 		if err != nil {
