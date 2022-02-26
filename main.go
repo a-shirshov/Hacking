@@ -33,6 +33,14 @@ type request struct {
 	Body string `json:"body,omitempty"`
 }
 
+type response struct {
+	Protocol string `json:"protocol"`
+	Code string `json:"code"`
+	Message string `json:"message"`
+	Headers map[string]interface{} `json:"headers,omitempty"`
+	Body string `json:"body,omitempty"`
+}
+
 func ParseFirstLine(firstLine string) (string, string, string) {
 	firstLineParts := strings.Split(firstLine, " ")
 	method := firstLineParts[0]
@@ -150,13 +158,13 @@ func ReadMessage(conn net.Conn) string {
 	}
 }
 
-func CopyMessage(to net.Conn, from net.Conn) (error) {
-	message:= ReadMessage(from)
+func CopyMessage(to net.Conn, from net.Conn) (string,error) {
+	message := ReadMessage(from)
 	_, err := to.Write([]byte(message))
 	if err != nil {
-		return err
+		return "",err
 	}
-	return nil
+	return message, nil
 }
 
 func ParseMessage(message string) (string, string, string) {
@@ -217,7 +225,7 @@ func putCookies(cookies string) map[string]interface{} {
 	return mapCookies
 }
 
-func MessageToJson(message string) string {
+func RequestToJson(message string) string {
 	jsonRequest := &request{}
 	mapHeaders := make(map[string]interface{})
 	messageParts := strings.Split(message,"\r\n")
@@ -264,6 +272,47 @@ func MessageToJson(message string) string {
 	return ""
 }
 
+func ResponseToJson(message string) string {
+	jsonResponse := &response{}
+	mapHeaders := make(map[string]interface{})
+	messageParts := strings.Split(message,"\r\n")
+
+	//Parse 
+	for index, line := range messageParts {
+		if index == 0 {
+			firstLineParts := strings.Split(line," ")
+			jsonResponse.Protocol = firstLineParts[0]
+			jsonResponse.Code = firstLineParts[1]
+			jsonResponse.Message = strings.Join(firstLineParts[2:]," ")
+			continue
+		}
+
+		//Delimeter beetween headers and body
+		if line != "" {
+			lineParts := strings.Split(line,": ")
+			headerName := lineParts[0]
+			log.Print(headerName)
+			headerValue := lineParts[1]
+			log.Print(headerValue)
+			mapHeaders[headerName] = headerValue
+		} else {
+			jsonResponse.Headers = mapHeaders
+			body := strings.Join(messageParts[index:],"")
+			jsonResponse.Body = body
+			break
+		}
+	}
+	
+	result, err := json.Marshal(jsonResponse)
+	if err != nil {
+		log.Print(err.Error())
+	}
+
+	log.Print("Json:",string(result))
+	return ""
+
+}
+
 
 func Handler(conn net.Conn) {
 	defer conn.Close()
@@ -279,13 +328,17 @@ func Handler(conn net.Conn) {
 		}
 		defer dest.Close()
 
-		_ = MessageToJson(modMessage)
+		_ = RequestToJson(modMessage)
 
 		_, err = dest.Write([]byte(modMessage))
 		if err != nil {
 			log.Print(err.Error())
 		}
-		CopyMessage(conn,dest)
+		response,err := CopyMessage(conn,dest)
+		if err != nil {
+			log.Print(err.Error())
+		}
+		_ = ResponseToJson(response)
 	//HTTPS
 	} else {
 
