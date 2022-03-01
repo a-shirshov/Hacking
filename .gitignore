@@ -2,3 +2,6 @@ certs
 ca.crt
 ca.key
 cert.key
+
+proxy
+web
