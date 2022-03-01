@@ -1,14 +1,30 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.17-alpine
+FROM golang:latest as build
+LABEL maintainer="Artyom <artyomsh01@yandex.ru>"
 WORKDIR /app
-COPY * ./
-
+COPY go.mod .
+COPY go.sum .
 RUN go mod download
+COPY . /app
+RUN make build
 
-RUN apk --no-cache add ca-certificates
-RUN apk add --no-cache openssl
+FROM golang:latest as proxt
+LABEL maintainer="Artyom <artyomsh01@yandex.ru>"
+WORKDIR /app
+COPY go.mod .
+COPY go.sum .
+RUN go mod download
+COPY . /app
+RUN make proxy
+CMD ["./proxy"]
 
-RUN go build -o /proxy 
-RUN ./gen_ca.sh 
-CMD ["/proxy"]
+FROM golang:latest as web
+LABEL maintainer="Artyom <artyomsh01@yandex.ru>"
+WORKDIR /app
+COPY go.mod .
+COPY go.sum .
+RUN go mod download
+COPY . /app
+RUN make web
+CMD ["./web"]
