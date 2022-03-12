@@ -1,17 +1,17 @@
 package parser
 
 import (
-	"strings"
 	"log"
+	"strings"
 )
-
-
 
 func putParams(params string) map[string]interface{} {
 	mapParams := make(map[string]interface{})
 	paramsParts := strings.Split(params, "&")
+	log.Println("In Params")
 	for _, param := range paramsParts {
 		keyAndValue := strings.Split(param, "=")
+		log.Println(keyAndValue)
 		key := keyAndValue[0]
 		value := keyAndValue[1]
 		mapParams[key] = value
@@ -37,7 +37,7 @@ func getHost(hostLine string) string {
 	host := hostLineParts[1]
 	//Delete \n
 	host = host[:len(host)-1]
-	if !strings.HasSuffix(host, ":443") {
+	if !strings.HasSuffix(host, ":443") && !strings.HasSuffix(host, ":8080") {
 		host = host + ":80"
 	}
 	log.Print("Host:", host)
@@ -63,7 +63,6 @@ func ParseFirstLine(firstLine string) (string, string, string) {
 	log.Print("Protocol:", protocol)
 	return method, path, protocol
 }
-
 
 func ParseMessage(message string) (string, string, string) {
 	var method string
@@ -98,4 +97,3 @@ func ParseMessage(message string) (string, string, string) {
 	}
 	return method, host, resultMessage
 }
-

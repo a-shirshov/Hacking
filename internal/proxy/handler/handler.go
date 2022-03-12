@@ -59,7 +59,7 @@ func (p *Proxy) Handler(conn net.Conn) {
 			log.Print(err.Error())
 		}
 
-		p.usecase.Save(modMessage, response,false)
+		p.usecase.Save(modMessage, response, false)
 		//HTTPS
 	} else {
 		log.Print("Here 1")
@@ -75,7 +75,7 @@ func (p *Proxy) Handler(conn net.Conn) {
 
 		output, err := exec.Command("/bin/sh", "gen_cert.sh", hostWithoutPort, randStr).Output()
 		if err != nil {
-			log.Print("Command:",err.Error())
+			log.Print("Command:", err.Error())
 		}
 		os.WriteFile("certs/"+hostWithoutPort+".crt", output, 0666)
 
@@ -99,9 +99,10 @@ func (p *Proxy) Handler(conn net.Conn) {
 
 		defer dest.Close()
 
-		request,_ := utils.CopyMessage(dest, conn)
-		response,_ := utils.CopyMessage(conn, dest)
-		p.usecase.Save(request,response,true)
+		request, _ := utils.CopyMessage(dest, conn)
+		log.Print("Request:\n", request)
+		response, _ := utils.CopyMessage(conn, dest)
+		p.usecase.Save(request, response, true)
 
 	}
 }

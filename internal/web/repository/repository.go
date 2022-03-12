@@ -9,10 +9,9 @@ import (
 
 const (
 	getRequestsJsonQuery = `select id, requestJson, responseJson from "request-response"`
-	getRequestJsonByID = `select id, requestJson, responseJson from "request-response" where id = $1`
-	getRequestByID = `select id, request, response, isSecure from "request-response" where id = $1`
-) 
-
+	getRequestJsonByID   = `select id, requestJson, responseJson from "request-response" where id = $1`
+	getRequestByID       = `select id, request, response, isSecure from "request-response" where id = $1`
+)
 
 type Repository struct {
 	db *sqlx.DB
@@ -24,7 +23,7 @@ func NewRepository(db *sqlx.DB) *Repository {
 	}
 }
 
-func (r *Repository) GetRequestsJson() (*models.RequestsJson,error) {
+func (r *Repository) GetRequestsJson() (*models.RequestsJson, error) {
 	rows, err := r.db.Queryx(getRequestsJsonQuery)
 	if err != nil {
 		log.Print(err.Error())
@@ -35,8 +34,8 @@ func (r *Repository) GetRequestsJson() (*models.RequestsJson,error) {
 
 	for rows.Next() {
 		request := &models.RequestJson{}
-	
-		err := rows.Scan(&request.ID,&request.Request,&request.Response)
+
+		err := rows.Scan(&request.ID, &request.Request, &request.Response)
 		if err != nil {
 			log.Print(err)
 			return nil, err
@@ -46,24 +45,24 @@ func (r *Repository) GetRequestsJson() (*models.RequestsJson,error) {
 	return requests, nil
 }
 
-func (r *Repository) GetRequestJson(id int) (*models.RequestJson,error) {
-	row := r.db.QueryRow(getRequestJsonByID,id)
-	request := &models.RequestJson{}
-	err := row.Scan(&request.ID,&request.Request,&request.Response)
+func (r *Repository) GetRequestJson(id int) (*models.RequestJsonWithSecure, error) {
+	row := r.db.QueryRow(getRequestJsonByID, id)
+	request := &models.RequestJsonWithSecure{}
+	err := row.Scan(&request.ID, &request.Request, &request.Response)
 	if err != nil {
 		log.Print(err)
-		return nil,err
+		return nil, err
 	}
 	return request, nil
 }
 
 func (r *Repository) GetRequest(id int) (*models.Request, error) {
-	row := r.db.QueryRow(getRequestByID,id)
+	row := r.db.QueryRow(getRequestByID, id)
 	request := &models.Request{}
-	err := row.Scan(&request.ID,&request.Request,&request.Response,&request.IsSecure)
+	err := row.Scan(&request.ID, &request.Request, &request.Response, &request.IsSecure)
 	if err != nil {
 		log.Print(err)
-		return nil,err
+		return nil, err
 	}
 	return request, nil
 }

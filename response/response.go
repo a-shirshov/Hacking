@@ -1,15 +1,14 @@
 package response
 
 import (
-	"net/http"
-	"log"
 	"encoding/json"
+	"log"
+	"net/http"
 )
 
 type Response struct {
 	Message string `json:"message"`
 }
-
 
 func SendResponse(w http.ResponseWriter, response interface{}) {
 	w.Header().Set("Content-Type", "application/json")

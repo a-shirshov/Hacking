@@ -5,7 +5,7 @@ import (
 )
 
 type Repository interface {
-	GetRequestsJson() (*models.RequestsJson,error)
-	GetRequestJson(id int)  (*models.RequestJson, error)
-	GetRequest(id int)  (*models.Request, error)
+	GetRequestsJson() (*models.RequestsJson, error)
+	GetRequestJson(id int) (*models.RequestJsonWithSecure, error)
+	GetRequest(id int) (*models.Request, error)
 }

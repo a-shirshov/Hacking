@@ -1,12 +1,12 @@
 package utils
 
 import (
+	"bufio"
 	"io"
 	"log"
 	"net"
-	"bufio"
-	"strings"
 	"strconv"
+	"strings"
 )
 
 func readBytesN(reader io.Reader, size int64, message *string) {

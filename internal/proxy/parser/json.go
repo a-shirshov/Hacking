@@ -21,6 +21,7 @@ func RequestToJson(message string) string {
 			pathParts := strings.Split(path, "?")
 			jsonRequest.Path = pathParts[0]
 			if len(pathParts) > 1 {
+				log.Println("Before Params")
 				jsonRequest.Params = putParams(pathParts[1])
 			}
 			continue
@@ -45,14 +46,11 @@ func RequestToJson(message string) string {
 		}
 	}
 
-	
-
 	result, err := json.Marshal(jsonRequest)
 	if err != nil {
 		log.Print(err.Error())
 	}
 
-	
 	return string(result)
 }
 
@@ -91,4 +89,30 @@ func ResponseToJson(message string) string {
 	}
 
 	return string(result)
+}
+
+func JsonToRequest(request *prxModels.Request) string {
+	var resultRequest string
+	var firstLine string
+
+	if len(request.Params) > 0 {
+		url := request.Path + "?"
+		for key, value := range request.Params {
+			param := key + ":" + value.(string)
+			url += param
+		}
+		firstLine = request.Method + " " + url + " " + request.Protocol + "\r\n"
+	} else {
+		firstLine = request.Method + " " + request.Path + " " + request.Protocol + "\r\n"
+	}
+
+	resultRequest += firstLine
+	for key, value := range request.Headers {
+		line := key + ": " + value.(string) + "\r\n"
+		resultRequest += line
+	}
+
+	resultRequest += "\r\n"
+	resultRequest += request.Body
+	return resultRequest
 }

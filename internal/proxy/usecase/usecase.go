@@ -18,5 +18,5 @@ func NewUsecase(repo proxy.Repository) *Usecase {
 func (u *Usecase) Save(request string, response string, isSecure bool) {
 	jsonRequest := parser.RequestToJson(request)
 	jsonResponse := parser.ResponseToJson(response)
-	u.repo.Save(request,response,jsonRequest, jsonResponse,isSecure)
+	u.repo.Save(request, response, jsonRequest, jsonResponse, isSecure)
 }

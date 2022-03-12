@@ -9,7 +9,7 @@ RUN go mod download
 COPY . /app
 RUN make build
 
-FROM golang:latest as proxt
+FROM golang:latest as proxy
 LABEL maintainer="Artyom <artyomsh01@yandex.ru>"
 WORKDIR /app
 COPY go.mod .

@@ -1,13 +1,15 @@
 postgres_db:
     user: "postgres"
     password: "password"
-    host: "postgres"
-    port: "5432"
+    host: "localhost"
+    #host: "postgres"
+    port: "5437"
     dbname: "postgres"
     sslmode: "disable"
 
 proxy:
-    host: "proxy"
+    #host: "proxy"
+    host: "localhost"
     port: "8080"
 
 
