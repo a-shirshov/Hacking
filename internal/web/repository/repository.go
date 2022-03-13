@@ -9,7 +9,7 @@ import (
 
 const (
 	getRequestsJsonQuery = `select id, requestJson, responseJson from "request-response"`
-	getRequestJsonByID   = `select id, requestJson, responseJson from "request-response" where id = $1`
+	getRequestJsonByID   = `select id, requestJson, responseJson, isSecure from "request-response" where id = $1`
 	getRequestByID       = `select id, request, response, isSecure from "request-response" where id = $1`
 )
 
@@ -48,7 +48,7 @@ func (r *Repository) GetRequestsJson() (*models.RequestsJson, error) {
 func (r *Repository) GetRequestJson(id int) (*models.RequestJsonWithSecure, error) {
 	row := r.db.QueryRow(getRequestJsonByID, id)
 	request := &models.RequestJsonWithSecure{}
-	err := row.Scan(&request.ID, &request.Request, &request.Response)
+	err := row.Scan(&request.ID, &request.Request, &request.Response, &request.IsSecure)
 	if err != nil {
 		log.Print(err)
 		return nil, err

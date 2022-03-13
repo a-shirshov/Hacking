@@ -8,10 +8,8 @@ import (
 func putParams(params string) map[string]interface{} {
 	mapParams := make(map[string]interface{})
 	paramsParts := strings.Split(params, "&")
-	log.Println("In Params")
 	for _, param := range paramsParts {
 		keyAndValue := strings.Split(param, "=")
-		log.Println(keyAndValue)
 		key := keyAndValue[0]
 		value := keyAndValue[1]
 		mapParams[key] = value

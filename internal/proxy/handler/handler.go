@@ -62,7 +62,6 @@ func (p *Proxy) Handler(conn net.Conn) {
 		p.usecase.Save(modMessage, response, false)
 		//HTTPS
 	} else {
-		log.Print("Here 1")
 		_, err := conn.Write([]byte(okMessage))
 		if err != nil {
 			log.Println(err.Error())

@@ -50,18 +50,15 @@ func makeSecureConn(proxyHost string, proxyPort string, requestStruct *prxModels
 	host := requestStruct.Headers["Host"].(string) + ":443"
 	protocol := requestStruct.Protocol
 	connectMessage = "CONNECT " + host + " " + protocol + "\r\n" + "Host: " + host + "\r\n" + "\r\n"
-	log.Print(connectMessage)
 
 	conn, err := net.DialTimeout("tcp", proxyHost+":"+proxyPort, time.Second*10)
 	if err != nil {
 		log.Print(err)
 		return nil, err
 	}
-	defer conn.Close()
 
 	conn.Write([]byte(connectMessage))
-	message := utils.ReadMessage(conn)
-	log.Print(message)
+	_ = utils.ReadMessage(conn)
 
 	confHost := &tls.Config{
 		ServerName:         host,
@@ -75,10 +72,9 @@ func makeSecureConn(proxyHost string, proxyPort string, requestStruct *prxModels
 }
 
 func sendAndGetHTTPS(conn net.Conn, request string) (string, error) {
+	defer conn.Close()
 	conn.Write([]byte(request))
-	log.Print(request)
 	response := utils.ReadMessage(conn)
-	log.Print(response)
 	return response, nil
 }
 
@@ -196,7 +192,7 @@ func (u *Usecase) ScanRequest(id int, params *[]string) (*[]string, error) {
 		}
 		exposedRequest.Params[param] = randStr
 		exposedRequestStr := myParser.JsonToRequest(exposedRequest)
-
+		
 		if !requestJson.IsSecure {
 			response, err = sendAndGetHTTP(proxyHost, proxyPort, exposedRequestStr)
 		} else {
@@ -219,7 +215,11 @@ func (u *Usecase) ScanRequest(id int, params *[]string) (*[]string, error) {
 			return nil, err
 		}
 
-		if checkResponse(response, &randStr) {
+		responseStruct := &prxModels.Response{}
+
+		json.Unmarshal([]byte(response),responseStruct)
+
+		if checkResponse(responseStruct.Body, &randStr) {
 			exposedParams = append(exposedParams, param)
 		}
 

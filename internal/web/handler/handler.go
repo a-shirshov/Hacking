@@ -81,6 +81,6 @@ func (h *Handler) ScanRequest(w http.ResponseWriter, r *http.Request) {
 	if len(*exposedParams) > 0 {
 		response.SendResponse(w, response.ResponseParams{Params: *exposedParams})
 	} else {
-		response.SendResponse(w, response.Response{Message: "OK"})
+		response.SendResponse(w, response.Response{Message: "Not found exposed params"})
 	}
 }

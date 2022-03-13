@@ -43,7 +43,7 @@ func main() {
 	r.HandleFunc("/repeat/{id}", webH.RepeatRequest)
 	r.HandleFunc("/scan/{id}", webH.ScanRequest)
 
-	err = http.ListenAndServe(":49010", r)
+	err = http.ListenAndServe(":8000", r)
 	if err != nil {
 		log.Fatal(err)
 	}
