@@ -94,12 +94,16 @@ func ResponseToJson(message string) string {
 func JsonToRequest(request *prxModels.Request) string {
 	var resultRequest string
 	var firstLine string
-
-	if len(request.Params) > 0 {
+	paramsCount := len(request.Params)
+	if paramsCount > 0 {
+		counter := 0
 		url := request.Path + "?"
 		for key, value := range request.Params {
-			param := key + ":" + value.(string)
+			param := key + "=" + value.(string)
 			url += param
+			if counter != (paramsCount - 1) {
+				url += "&"
+			}
 		}
 		firstLine = request.Method + " " + url + " " + request.Protocol + "\r\n"
 	} else {

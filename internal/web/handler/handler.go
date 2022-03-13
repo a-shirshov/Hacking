@@ -72,9 +72,15 @@ func (h *Handler) ScanRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.usecase.ScanRequest(id, h.params)
+	exposedParams, err := h.usecase.ScanRequest(id, h.params)
 	if err != nil {
 		log.Print(err)
 		return
+	}
+
+	if len(*exposedParams) > 0 {
+		response.SendResponse(w, response.ResponseParams{Params: *exposedParams})
+	} else {
+		response.SendResponse(w, response.Response{Message: "OK"})
 	}
 }

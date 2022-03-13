@@ -41,8 +41,9 @@ func main() {
 	r.HandleFunc("/requests", webH.GetRequests)
 	r.HandleFunc("/request/{id}", webH.GetRequest)
 	r.HandleFunc("/repeat/{id}", webH.RepeatRequest)
+	r.HandleFunc("/scan/{id}", webH.ScanRequest)
 
-	err = http.ListenAndServe(":8000", r)
+	err = http.ListenAndServe(":49010", r)
 	if err != nil {
 		log.Fatal(err)
 	}

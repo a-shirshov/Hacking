@@ -3,7 +3,6 @@ package usecase
 import (
 	"crypto/tls"
 	"encoding/json"
-	"github.com/spf13/viper"
 	"log"
 	"net"
 	prxModels "proxy/internal/proxy/models"
@@ -12,6 +11,9 @@ import (
 	webModels "proxy/internal/web/models"
 	"proxy/utils"
 	"strings"
+	"time"
+
+	"github.com/spf13/viper"
 )
 
 type Usecase struct {
@@ -31,28 +33,29 @@ func htmlReplace(html string) string {
 	return htmlClean
 }
 
-func sendAndGetHTTP(proxyHost string, proxyPort string, request string) error {
+func sendAndGetHTTP(proxyHost string, proxyPort string, request string) (string, error) {
 	conn, err := net.Dial("tcp", proxyHost+":"+proxyPort)
 	if err != nil {
 		log.Print(err)
-		return err
+		return "", err
 	}
 	defer conn.Close()
 	conn.Write([]byte(request))
-	_ = utils.ReadMessage(conn)
-	return nil
+	response := utils.ReadMessage(conn)
+	return response, nil
 }
 
-func sendAndGetHTTPS(proxyHost string, proxyPort string, request string, requestStruct *prxModels.Request) error {
+func makeSecureConn(proxyHost string, proxyPort string, requestStruct *prxModels.Request) (net.Conn, error) {
 	var connectMessage string
 	host := requestStruct.Headers["Host"].(string) + ":443"
 	protocol := requestStruct.Protocol
 	connectMessage = "CONNECT " + host + " " + protocol + "\r\n" + "Host: " + host + "\r\n" + "\r\n"
 	log.Print(connectMessage)
 
-	conn, err := net.Dial("tcp", proxyHost+":"+proxyPort)
+	conn, err := net.DialTimeout("tcp", proxyHost+":"+proxyPort, time.Second*10)
 	if err != nil {
 		log.Print(err)
+		return nil, err
 	}
 	defer conn.Close()
 
@@ -68,11 +71,15 @@ func sendAndGetHTTPS(proxyHost string, proxyPort string, request string, request
 	tlsConn := tls.Client(conn, confHost)
 	tlsConn.Handshake()
 	conn = net.Conn(tlsConn)
+	return conn, nil
+}
 
+func sendAndGetHTTPS(conn net.Conn, request string) (string, error) {
 	conn.Write([]byte(request))
+	log.Print(request)
 	response := utils.ReadMessage(conn)
 	log.Print(response)
-	return nil
+	return response, nil
 }
 
 func (u *Usecase) GetRequestsJson() (*webModels.RequestsJson, error) {
@@ -121,7 +128,7 @@ func (u *Usecase) RepeatRequest(id int) error {
 	proxyPort := viper.GetString("proxy.port")
 
 	if !request.IsSecure {
-		err := sendAndGetHTTP(proxyHost, proxyPort, request.Request)
+		_, err := sendAndGetHTTP(proxyHost, proxyPort, request.Request)
 
 		if err != nil {
 			return err
@@ -136,7 +143,12 @@ func (u *Usecase) RepeatRequest(id int) error {
 		requestStruct := &prxModels.Request{}
 		json.Unmarshal([]byte(requestJson.Request), requestStruct)
 		request := myParser.JsonToRequest(requestStruct)
-		err = sendAndGetHTTPS(proxyHost, proxyPort, request, requestStruct)
+
+		conn, err := makeSecureConn(proxyHost, proxyPort, requestStruct)
+		if err != nil {
+			return err
+		}
+		_, err = sendAndGetHTTPS(conn, request)
 		if err != nil {
 			return err
 		}
@@ -145,11 +157,15 @@ func (u *Usecase) RepeatRequest(id int) error {
 
 }
 
-func (u *Usecase) ScanRequest(id int, params *[]string) error {
+func checkResponse(response string, randStr *string) bool {
+	return strings.Contains(response, *randStr)
+}
+
+func (u *Usecase) ScanRequest(id int, params *[]string) (*[]string, error) {
 	requestJson, err := u.repo.GetRequestJson(id)
 	if err != nil {
 		log.Print(err)
-		return err
+		return nil, err
 	}
 
 	//Лицом по клавиатуре
@@ -160,24 +176,53 @@ func (u *Usecase) ScanRequest(id int, params *[]string) error {
 
 	request := &prxModels.Request{}
 	json.Unmarshal([]byte(requestJson.Request), request)
+	var exposedParams []string
 
 	for _, param := range *params {
-		exposedRequest := request
+		var response string
+
+		exposedRequest := &prxModels.Request{
+			Method:   request.Method,
+			Path:     request.Path,
+			Protocol: request.Protocol,
+			Params:   request.Params,
+			Headers:  request.Headers,
+			Cookies:  request.Cookies,
+			Body:     request.Body,
+		}
+
+		if exposedRequest.Params == nil {
+			exposedRequest.Params = make(map[string]interface{})
+		}
 		exposedRequest.Params[param] = randStr
 		exposedRequestStr := myParser.JsonToRequest(exposedRequest)
+
 		if !requestJson.IsSecure {
-			err := sendAndGetHTTP(proxyHost, proxyPort, exposedRequestStr)
-			if err != nil {
-				log.Print("Err:", err)
-			}
+			response, err = sendAndGetHTTP(proxyHost, proxyPort, exposedRequestStr)
 		} else {
-			err := sendAndGetHTTPS(proxyHost, proxyPort, exposedRequestStr, exposedRequest)
+			conn, err := makeSecureConn(proxyHost, proxyPort, exposedRequest)
 			if err != nil {
-				log.Print("Err:", err)
-				return err
+				return nil, err
 			}
+			defer conn.Close()
+
+			response, err = sendAndGetHTTPS(conn, exposedRequestStr)
+			if err != nil {
+				log.Print(err)
+				return nil, err
+			}
+			conn.Close()
+		}
+
+		if err != nil {
+			log.Print("Err:", err)
+			return nil, err
+		}
+
+		if checkResponse(response, &randStr) {
+			exposedParams = append(exposedParams, param)
 		}
 
 	}
-	return err
+	return &exposedParams, err
 }
